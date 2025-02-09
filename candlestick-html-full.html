@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stock Candlestick Chart - Full Day</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .chart-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .candlestick {
+            cursor: pointer;
+        }
+        .tooltip {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 8px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <div class="title">Novo Nordisk (NOVO) - October 31, 2023</div>
+        <div class="controls">
+            <button onclick="zoomIn()">Zoom In (+)</button>
+            <button onclick="zoomOut()">Zoom Out (-)</button>
+            <button onclick="resetZoom()">Reset</button>
+        </div>
+        <div id="chart"></div>
+        <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <script>
+        const data = [
+            { time: '09:30', open: 185.67, high: 186.23, low: 183.12, close: 183.45, volume: 125000 },
+            { time: '09:45', open: 183.45, high: 183.89, low: 180.34, close: 181.23, volume: 98000 },
+            { time: '10:00', open: 181.23, high: 182.45, low: 179.56, close: 179.89, volume: 115000 },
+            { time: '10:15', open: 179.89, high: 180.12, low: 177.23, close: 177.45, volume: 145000 },
+            { time: '10:30', open: 177.45, high: 178.34, low: 175.12, close: 175.67, volume: 167000 },
+            { time: '10:45', open: 175.67, high: 176.23, low: 172.89, close: 173.23, volume: 189000 },
+            { time: '11:00', open: 173.23, high: 173.89, low: 171.23, close: 171.89, volume: 201000 },
+            { time: '11:15', open: 171.89, high: 175.23, low: 171.45, close: 174.56, volume: 178000 },
+            { time: '11:30', open: 174.56, high: 177.23, low: 174.12, close: 176.78, volume: 156000 },
+            { time: '11:45', open: 176.78, high: 178.89, low: 176.23, close: 178.34, volume: 134000 },
+            { time: '12:00', open: 178.34, high: 180.23, low: 177.89, close: 179.89, volume: 98000 },
+            { time: '12:15', open: 179.89, high: 181.67, low: 179.23, close: 181.23, volume: 87000 },
+            { time: '12:30', open: 181.23, high: 183.12, low: 180.89, close: 182.67, volume: 92000 },
+            { time: '12:45', open: 182.67, high: 182.89, low: 179.78, close: 180.34, volume: 112000 },
+            { time: '13:00', open: 180.34, high: 180.89, low: 178.23, close: 178.89, volume: 89000 },
+            { time: '13:15', open: 178.89, high: 179.23, low: 176.12, close: 176.45, volume: 95000 },
+            { time: '13:30', open: 176.45, high: 176.89, low: 173.89, close: 174.23, volume: 123000 },
+            { time: '13:45', open: 174.23, high: 178.34, low: 174.12, close: 177.89, volume: 145000 },
+            { time: '14:00', open: 177.89, high: 180.89, low: 177.45, close: 180.45, volume: 167000 },
+            { time: '14:15', open: 180.45, high: 183.23, low: 180.12, close: 182.78, volume: 189000 },
+            { time: '14:30', open: 182.78, high: 184.56, low: 182.23, close: 184.23, volume: 178000 },
+            { time: '14:45', open: 184.23, high: 186.12, low: 184.01, close: 185.67, volume: 156000 },
+            { time: '15:00', open: 185.67, high: 187.23, low: 185.34, close: 186.89, volume: 134000 },
+            { time: '15:15', open: 186.89, high: 187.89, low: 186.45, close: 187.45, volume: 123000 },
+            { time: '15:30', open: 187.45, high: 187.67, low: 185.12, close: 185.67, volume: 145000 },
+            { time: '15:45', open: 185.67, high: 185.89, low: 183.89, close: 184.23, volume: 112000 },
+            { time: '16:00', open: 184.23, high: 184.45, low: 183.67, close: 184.12, volume: 98000 }
+        ];
+
+        const margin = { top: 40, right: 60, bottom: 50, left: 60 };
+        const width = 1200 - margin.left - margin.right;
+        const height = 600 - margin.top - margin.bottom;
+
+        let scale = 1;
+        let transform = d3.zoomIdentity;
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scaleBand()
+            .domain(data.map(d => d.time))
+            .range([0, width])
+            .padding(0.2);
+
+        const y = d3.scaleLinear()
+            .domain([d3.min(data, d => d.low) * 0.999, d3.max(data, d => d.high) * 1.001])
+            .range([height, 0]);
+
+        // Add X axis
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x))
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", ".15em")
+            .attr("transform", "rotate(-45)");
+
+        // Add Y axis
+        svg.append("g")
+            .call(d3.axisLeft(y));
+
+        // Add grid lines
+        const xGrid = svg.append("g")
+            .attr("class", "grid")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x)
+                .tickSize(-height)
+                .tickFormat(""))
+            .style("stroke-opacity", 0.1);
+
+        const yGrid = svg.append("g")
+            .attr("class", "grid")
+            .call(d3.axisLeft(y)
+                .tickSize(-width)
+                .tickFormat(""))
+            .style("stroke-opacity", 0.1);
+
+        // Add candlesticks
+        const g = svg.append("g");
+
+        g.selectAll("g")
+            .data(data)
+            .enter()
+            .append("g")
+            .attr("class", "candlestick")
+            .each(function(d) {
+                const g = d3.select(this);
+                const color = d.close > d.open ? "#22c55e" : "#ef4444";
+
+                // Draw the high-low line
+                g.append("line")
+                    .attr("x1", x(d.time) + x.bandwidth()/2)
+                    .attr("x2", x(d.time) + x.bandwidth()/2)
+                    .attr("y1", y(d.high))
+                    .attr("y2", y(d.low))
+                    .attr("stroke", color)
+                    .attr("stroke-width", 1);
+
+                // Draw the candle body
+                g.append("rect")
+                    .attr("x", x(d.time))
+                    .attr("y", y(Math.max(d.open, d.close)))
+                    .attr("width", x.bandwidth())
+                    .attr("height", Math.abs(y(d.open) - y(d.close)))
+                    .attr("fill", color);
+            })
+            .on("mouseover", function(event, d) {
+                const tooltip = d3.select("#tooltip");
+                tooltip.style("display", "block")
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px")
+                    .html(`
+                        <strong>${d.time}</strong><br/>
+                        Open: $${d.open.toFixed(2)}<br/>
+                        High: $${d.high.toFixed(2)}<br/>
+                        Low: $${d.low.toFixed(2)}<br/>
+                        Close: $${d.close.toFixed(2)}<br/>
+                        Volume: ${d.volume.toLocaleString()}
+                    `);
+            })
+            .on("mouseout", function() {
+                d3.select("#tooltip").style("display", "none");
+            });
+
+        // Zoom functions
+        function zoomIn() {
+            scale *= 1.2;
+            updateZoom();
+        }
+
+        function zoomOut() {
+            scale = Math.max(scale / 1.2, 0.5);
+            updateZoom();
+        }
+
+        function resetZoom() {
+            scale = 1;
+            transform = d3.zoomIdentity;
+            updateZoom();
+        }
+
+        function updateZoom() {
+            svg.attr("transform", `translate(${margin.left},${margin.top}) scale(${scale})`);
+        }
+
+        // Add chart title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -10)
+            .attr("text-anchor", "middle")
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("NOVO Stock Price (15-minute intervals)");
+    </script>
+</body>
+</html>
